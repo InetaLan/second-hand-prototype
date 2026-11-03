@@ -31,6 +31,7 @@ export type Draft = {
   removedComps: string[]
   aiFields?: Partial<Record<FieldKey, Field>>
   fresh?: boolean
+  lowQuality?: boolean
   updatedAt: number
 }
 export type Demo = { slowAI: boolean; offline: boolean }

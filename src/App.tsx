@@ -115,7 +115,7 @@ function useCases(): Case[] {
     { id: "f1-multi", fn: "F1", kind: "fail", title: "Keli daiktai kadre (A1)", notice: "DI klausia „Kurį daiktą parduodate?“ — pasirenkate daiktą ar rinkinį.", run: () => startSell(["multi"]) },
     { id: "f1-slow", fn: "F1", kind: "fail", title: "DI vėluoja > 8 s (E2)", notice: "Pasiūloma pildyti patiems; DI vėliau užpildo tik tuščius laukus.", run: () => startSell(["sweater", "label"], { slowAI: true, offline: false }) },
     { id: "f1-off", fn: "F1", kind: "fail", title: "DI nepasiekiamas (E6)", notice: "Forma veikia be DI, juodraštis saugomas; grįžus ryšiui siūloma užpildyti.", run: () => startSell(["sweater"], { slowAI: false, offline: true }) },
-    { id: "f1-dark", fn: "F1", kind: "low", title: "Tamsi nuotrauka (E1, E7)", notice: "Kokybės įspėjimas prieš DI; tęsiant — laukai su „?“ ir 3 variantais.", run: () => startSell(["dark"]) },
+    { id: "f1-dark", fn: "F1", kind: "low", title: "Tamsi nuotrauka (E1, E7)", notice: "Kokybės įspėjimas prieš DI; „Tęsti vis tiek“ — DI funkcijos nepasiekiamos, laukus pildote patys.", run: () => startSell(["dark"]) },
     { id: "f1-nolabel", fn: "F1", kind: "low", title: "Be etiketės nuotraukos", notice: "Sudėtis lieka tuščia („DI nenustatė“), ženklas — „?“.", run: () => startSell(["sweater"]) },
     { id: "f2-ok", fn: "F2", kind: "ok", title: "14 palyginamų prekių", notice: "Taisyklės intervalas per < 1 s, po ~2 s DI: 12–18 €, aukštas patikimumas, 3 strategijos.", run: () => startPrice(0) },
     { id: "f2-off", fn: "F2", kind: "fail", title: "DI nepasiekiamas / vėluoja (E2)", notice: "Rodomas tik orientacinis taisyklės intervalas; galima įvesti savo kainą.", run: () => startPrice(0, { slowAI: false, offline: true }) },
@@ -421,7 +421,7 @@ function About() {
           <table>
             <thead><tr><th>Trigeris</th><th>HITL veiksmas</th></tr></thead>
             <tbody>
-              <tr><td>Prasta nuotrauka (E1)</td><td>Įkelti iš naujo arba „Tęsti vis tiek“</td></tr>
+              <tr><td>Prasta nuotrauka (E1)</td><td>Įkelti iš naujo arba „Tęsti vis tiek“ — tada DI išjungiamas ir laukai pildomi rankiniu būdu</td></tr>
               <tr><td>Kadre &gt; 1 daiktas (A1)</td><td>Pasirinkti daiktą arba „Visi kartu – rinkinys“</td></tr>
               <tr><td>Laukas „?“ (pasitikėjimas 0,60–0,89)</td><td>Pasirinkti vieną iš 3 variantų arba įvesti savo</td></tr>
               <tr><td>Laukas ✎ (dydis, būklė, defektai)</td><td>Privaloma įvesti — DI to nemato</td></tr>

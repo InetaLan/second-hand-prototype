@@ -91,19 +91,6 @@ export function applyRecognition(fields: Record<FieldKey, Field>, rec: Recogniti
   return { fields: withText, filled }
 }
 
-// E1 + low quality: lower confidence so ✓ values become "?" with three options
-function degrade(rec: Recognition): Recognition {
-  const out: Recognition = {}
-  for (const [k, s] of Object.entries(rec)) {
-    if (!s) continue
-    const conf = s.conf * 0.82
-    const opts = OPTIONS[k as FieldKey] || []
-    const variants = s.variants || (s.value ? [s.value, ...opts.filter((o) => o !== s.value).slice(0, 2)] : undefined)
-    out[k as keyof Recognition] = { ...s, conf, variants, why: `${s.why} (nuotrauka prastos kokybės — tikrumas sumažėjo)` }
-  }
-  return out
-}
-
 function recognitionKey(d: Draft, item?: string) {
   const main = d.photos[0]
   const hasLabel = d.photos.some((p) => p.isLabel)
@@ -182,8 +169,7 @@ export function SellFlow({ exit }: { exit: () => void }) {
     // Computed outside the state updater so StrictMode's double call has no side effects
     const d = draftRef.current
     const { key, color, hasLabel } = recognitionKey(d, item)
-    let rec = recognitionFor(key, color, hasLabel)
-    if (d.photos[0]?.quality && !d.photos[0].quality.ok) rec = degrade(rec)
+    const rec = recognitionFor(key, color, hasLabel)
     const late = onlyEmpty || pendingFill.current
     pendingFill.current = false
     const { fields, filled } = applyRecognition(d.fields, rec, d.tone, late)
@@ -248,6 +234,7 @@ export function SellFlow({ exit }: { exit: () => void }) {
           }}
           analyze={() => startAnalysis()}
           manual={() => update((d) => ({ ...d, step: "details", mode: store.aiAvailable ? "manual" : "pending" }))}
+          continueLowQuality={() => update((d) => ({ ...d, step: "details", mode: "manual", lowQuality: true }))}
           busy={!!analysis}
         />
       )}
@@ -296,6 +283,7 @@ function PhotosStep({
   restart,
   analyze,
   manual,
+  continueLowQuality,
   busy,
 }: {
   draft: Draft
@@ -304,13 +292,13 @@ function PhotosStep({
   restart: () => void
   analyze: () => void
   manual: () => void
+  continueLowQuality: () => void
   busy: boolean
 }) {
   const store = useStore()
   const input = useRef<HTMLInputElement>(null)
   const replaceIndex = useRef<number | null>(null)
   const [checking, setChecking] = useState(false)
-  const [accepted, setAccepted] = useState(false)
   const [consentOpen, setConsentOpen] = useState(false)
   const [training, setTraining] = useState(store.consent.training)
   const photos = draft.photos
@@ -335,13 +323,12 @@ function PhotosStep({
       }
     }
     setChecking(false)
-    setAccepted(false)
     update((d) => {
       const list = [...d.photos]
       if (replaceIndex.current !== null) list.splice(replaceIndex.current, 1, ...checked)
       else list.push(...checked)
       replaceIndex.current = null
-      return { ...d, photos: list.slice(0, 5), mode: "pending", item: undefined }
+      return { ...d, photos: list.slice(0, 5), mode: "pending", item: undefined, lowQuality: false }
     })
   }
 
@@ -353,8 +340,7 @@ function PhotosStep({
       list.push({ src: DEMO_PHOTOS[k], demo: k, isLabel: k === "label", quality })
     }
     setChecking(false)
-    setAccepted(false)
-    update((d) => ({ ...d, photos: list, item: undefined }))
+    update((d) => ({ ...d, photos: list, item: undefined, lowQuality: false }))
   }
 
   const start = () => {
@@ -419,17 +405,17 @@ function PhotosStep({
 
       {checking && photos.length > 0 && <p className="checking"><span className="spinner dark" /> Tikrinama nuotraukų kokybė…</p>}
 
-      {bad.length > 0 && !accepted && (
+      {bad.length > 0 && (
         <div className="banner warn" role="alert">
           <Icon name="alert" size={18} />
           <div>
             <strong>Nuotrauka gali būti netinkama DI atpažinimui</strong>
             {bad[0].quality!.issues.map((x) => <p key={x}>{x}</p>)}
-            <p>Dėl prastos kokybės DI bus mažiau tikras ir daugiau laukų pažymės „?“.</p>
+            <p>DI tokios nuotraukos neatpažins. Įkelkite geresnę arba tęskite ir užpildykite laukus patys.</p>
           </div>
           <div className="banner-actions">
             <button onClick={() => { replaceIndex.current = photos.indexOf(bad[0]); input.current?.click() }}>Įkelti iš naujo</button>
-            <button className="ghost" onClick={() => setAccepted(true)}>Tęsti vis tiek</button>
+            <button className="ghost" onClick={continueLowQuality}>Tęsti vis tiek</button>
           </div>
         </div>
       )}
@@ -473,7 +459,7 @@ function PhotosStep({
         <p>Prieš analizę pašalinsime vietos (EXIF) duomenis. Nuotraukos nenaudojamos DI mokymui be jūsų sutikimo.</p>
       </div>
       <div className="btn-row">
-        <button className="primary wide" onClick={start} disabled={busy || checking || !photos.length || !store.aiAvailable || (bad.length > 0 && !accepted)}>
+        <button className="primary wide" onClick={start} disabled={busy || checking || !photos.length || !store.aiAvailable || bad.length > 0}>
           <Icon name="sparkle" size={18} /> Užpildyti su DI
         </button>
         <button className="secondary wide" onClick={manual}>
@@ -720,13 +706,20 @@ function DetailsStep({ draft, update, refill, busy }: { draft: Draft; update: (f
             <b>{offered} / 9</b>
           </div>
         )}
-        {draft.mode !== "ai" && !store.aiAvailable && (
+        {draft.lowQuality && (
+          <div className="banner error" role="alert">
+            <Icon name="alert" size={18} />
+            <div><strong>DI funkcijos nepasiekiamos</strong><p>Nuotrauka per prastos kokybės atpažinimui, todėl DI laukų nesiūlo. Užpildykite juos patys arba įkelkite geresnę nuotrauką.</p></div>
+            <div className="banner-actions"><button onClick={() => update((d) => ({ ...d, step: "photos" }))}>Įkelti kitą nuotrauką</button></div>
+          </div>
+        )}
+        {draft.mode !== "ai" && !draft.lowQuality && !store.aiAvailable && (
           <div className="banner error">
             <Icon name="wifi" size={18} />
             <div><strong>Pildote be DI — paslauga nepasiekiama</strong><p>Duomenys saugomi įrenginyje. Grįžus ryšiui pasiūlysime tuščių laukų reikšmes.</p></div>
           </div>
         )}
-        {draft.mode === "pending" && store.aiAvailable && draft.photos.length > 0 && (
+        {draft.mode === "pending" && !draft.lowQuality && store.aiAvailable && draft.photos.length > 0 && (
           <div className="banner info">
             <Icon name="sparkle" size={18} />
             <div><strong>{busy ? "DI dar dirba fone…" : "DI pasiekiamas"}</strong><p>{busy ? "Kai baigs, užpildys tik tuščius laukus ir praneš." : "Galime pasiūlyti reikšmes tuščiems laukams. Jūsų įvestų nekeisime."}</p></div>
@@ -734,14 +727,22 @@ function DetailsStep({ draft, update, refill, busy }: { draft: Draft; update: (f
           </div>
         )}
         <h1>Patikrinkite informaciją</h1>
-        <p className="subcopy">DI gali suklysti. Bet kurią reikšmę galite pakeisti, pergeneruoti ↻ arba grąžinti DI versiją.</p>
-        <div className="legend">
-          <Confidence kind="high" /> <Confidence kind="check" /> <Confidence kind="manual" /> <Confidence kind="ai" /> <Confidence kind="empty" />
-        </div>
-        <div className="banner muted">
-          <Icon name="eye" size={16} />
-          <p><b>DI nemato dydžio, defektų ir autentiškumo.</b> Šiuos laukus visada pildote patys.</p>
-        </div>
+        {draft.lowQuality ? (
+          <p className="subcopy">Visus laukus pildote patys. Privalomi laukai pažymėti *.</p>
+        ) : (
+          <>
+            <p className="subcopy">DI gali suklysti. Bet kurią reikšmę galite pakeisti, pergeneruoti ↻ arba grąžinti DI versiją.</p>
+            <div className="legend">
+              <Confidence kind="high" /> <Confidence kind="check" /> <Confidence kind="manual" /> <Confidence kind="ai" /> <Confidence kind="empty" />
+            </div>
+          </>
+        )}
+        {!draft.lowQuality && (
+          <div className="banner muted">
+            <Icon name="eye" size={16} />
+            <p><b>DI nemato dydžio, defektų ir autentiškumo.</b> Šiuos laukus visada pildote patys.</p>
+          </div>
+        )}
 
         <div className="form-grid">
           {FIELD_ORDER.map((key) => (

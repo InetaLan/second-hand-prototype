@@ -34,7 +34,7 @@
 | S2 | Žinomas ženklas (logotipas) | Testas „Keli daiktai“ → džinsai: ženklas „?“ su variantais (American Eagle, Levi's, Wrangler). Dydžio DI neįrašo, laukas ✎. |
 | S3 | Dviprasmė nuotrauka (keli daiktai) | DI klausia „Kurį daiktą parduodate?“, rodo ribas nuotraukoje ir siūlo variantą „Visi kartu – rinkinys“. |
 | S4 | Brangi prekė / galima klastotė | Įrašius prabangų ženklą (pvz., Gucci) rodomas įspėjimas prie lauko ir kainos žingsnyje. Po paskelbimo skelbimą tikrina moderatorius. |
-| S5 | Prasta nuotrauka | Įspėjimas „Per tamsu / neryški“: [Įkelti iš naujo] [Tęsti vis tiek]. Tęsiant visi DI laukai tampa „?“, skelbimas nesugeneruojamas kaip faktas. |
+| S5 | Prasta nuotrauka | Įspėjimas „Per tamsu / neryški“: [Įkelti iš naujo] [Tęsti vis tiek]. Tęsiant DI nepaleidžiamas: rodoma „DI funkcijos nepasiekiamos“, laukai pildomi rankiniu būdu, todėl klaidingas skelbimas nesugeneruojamas. |
 | S6 | Pataisyti kategoriją ir kainą | Pakeitus kategoriją atsiranda „Prieš / po“ langas pavadinimui ir aprašymui (1 paspaudimas). Kainą galima pakeisti strategija arba savo kaina (1–2 veiksmai). |
 
 ## 3. Užduoties reikalavimų atitiktis
