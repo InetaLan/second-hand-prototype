@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 700" width="600" height="700">
+  <rect width="600" height="700" fill="#2b2b2e"/>
+  <g transform="rotate(-4 300 350)">
+    <rect x="150" y="90" width="300" height="520" rx="10" fill="#f3f0e8"/>
+    <text x="300" y="175" font-family="Helvetica, Arial" font-size="50" font-weight="700" text-anchor="middle" fill="#1a1a1a" opacity=".55">Ch<tspan opacity=".35">amp</tspan>ion</text>
+    <line x1="185" y1="210" x2="415" y2="210" stroke="#bbb" stroke-width="2"/>
+    <text x="300" y="275" font-family="Helvetica, Arial" font-size="30" text-anchor="middle" fill="#222">80% COTTON</text>
+    <text x="300" y="318" font-family="Helvetica, Arial" font-size="30" text-anchor="middle" fill="#222">20% POLYESTER</text>
+    <text x="300" y="370" font-family="Helvetica, Arial" font-size="22" text-anchor="middle" fill="#555">80% medvilnė · 20% poliesteris</text>
+    <text x="300" y="450" font-family="Helvetica, Arial" font-size="20" text-anchor="middle" fill="#777">MADE IN PORTUGAL</text>
+    <rect x="235" y="490" width="130" height="70" rx="6" fill="#d9d5cb"/>
+    <text x="300" y="540" font-family="Helvetica, Arial" font-size="40" text-anchor="middle" fill="#9a968d" opacity=".5">▒▒</text>
+  </g>
+</svg>

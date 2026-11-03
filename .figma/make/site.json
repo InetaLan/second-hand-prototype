@@ -1,0 +1,12 @@
+{
+  "title": "Antras kartas — DI prototipas",
+  "description": "Dėvėtų drabužių prekyvietės prototipas: skelbimas iš nuotraukų (F1) ir pagrįstas kainos intervalas (F2) su žmogaus kontrole.",
+  "language": "lt",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
