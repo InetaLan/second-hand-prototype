@@ -32,7 +32,7 @@
 .nav-item:hover { background: #e8e7e0; color: var(--ink); }
 .nav-item.active { background: var(--green); color: white; }
 .nav-item.active svg { color: var(--lime); }
-.nav-foot { margin-top: auto; display: grid; grid-template-columns: 36px 1fr 18px; align-items: center; gap: 10px; padding: 12px 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.nav-foot { margin-top: auto; display: grid; grid-template-columns: 36px 1fr; align-items: center; gap: 10px; padding: 12px 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
 .nav-foot .avatar { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--coral-soft); color: #8a3d2d; font-weight: 700; }
 .nav-foot div { display: flex; flex-direction: column; }
 .nav-foot span { color: var(--muted); font-size: 11px; margin-top: 2px; }
@@ -386,8 +386,17 @@ main { grid-column: 2; min-width: 0; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 12px rgba(220,233,223,.5); } }
 .bar { height: 6px; border-radius: 99px; background: #ecebe5; overflow: hidden; margin: 16px 0 10px; }
 .bar i { display: block; height: 100%; background: var(--green); transition: width .5s; }
-.item-picker { position: relative; margin: 14px 0; border-radius: 14px; overflow: hidden; }
-.item-picker img { width: 100%; display: block; }
+.modal.analysis { width: min(560px, 100%); padding: 22px 24px; }
+.modal.analysis h2 { margin: 2px 0 4px; }
+.picker-thumbs { display: flex; justify-content: center; gap: 6px; margin: 10px 0 0; }
+.picker-thumbs button { width: 46px; height: 46px; padding: 0; border-radius: 9px; overflow: hidden; border: 2px solid white; opacity: .7; box-shadow: 0 0 0 1px var(--line); }
+.picker-thumbs button.on { opacity: 1; border-color: var(--green); }
+.picker-thumbs img { width: 100%; height: 100%; object-fit: cover; }
+.item-stage { text-align: center; margin: 10px 0; }
+/* Rėmeliai pozicionuojami pagal pačią nuotrauką: konteineris apgaubia img */
+.item-picker { display: inline-block; position: relative; vertical-align: top; border-radius: 14px; overflow: hidden; max-width: 100%; }
+.item-picker img { display: block; max-height: 45vh; max-width: 100%; width: auto; object-fit: contain; }
+.item-picker .from-photo { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); min-height: 40px; width: max-content; max-width: calc(100% - 16px); white-space: normal; line-height: 1.25; padding: 8px 14px; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
 .item-picker .box { position: absolute; border: 2px dashed var(--lime); background: rgba(31,73,58,.12); border-radius: 10px; padding: 0; }
 .item-picker .box:hover { background: rgba(214,231,140,.3); border-style: solid; }
 .item-picker .box span { position: absolute; left: 6px; top: 6px; background: var(--green); color: white; font-size: 10.5px; font-weight: 700; padding: 4px 8px; border-radius: 99px; }
@@ -523,7 +532,7 @@ main { grid-column: 2; min-width: 0; }
 .product-info h3 { font-size: 13px; }
 
 /* listings */
-.listing-row { display: grid; grid-template-columns: 58px 1fr auto auto; gap: 14px; align-items: center; padding: 12px; border-radius: 16px; background: white; border: 1px solid var(--line); margin-bottom: 10px; cursor: pointer; }
+.listing-row { display: grid; grid-template-columns: 58px 1fr auto auto auto; gap: 14px; align-items: center; padding: 12px; border-radius: 16px; background: white; border: 1px solid var(--line); margin-bottom: 10px; cursor: pointer; }
 .listing-row img, .listing-row .ai-orb { width: 58px; height: 58px; border-radius: 12px; object-fit: cover; }
 .listing-row strong { display: block; font-size: 13.5px; }
 .listing-row span { font-size: 11.5px; color: var(--muted); display: inline-flex; gap: 3px; align-items: center; flex-wrap: wrap; }
@@ -570,7 +579,7 @@ td { padding: 11px 14px; border-top: 1px solid #efeee9; vertical-align: top; }
   .toasts { bottom: 82px; }
   .photo-grid { grid-template-columns: repeat(2, 1fr); }
   .cases, .about-grid, .product-modal { grid-template-columns: 1fr; }
-  .listing-row { grid-template-columns: 50px 1fr auto; }
+  .listing-row { grid-template-columns: 50px 1fr auto auto; }
   .listing-row .icon-btn { display: none; }
   .btn-row { flex-direction: column; }
   .flow-header .text-btn { font-size: 11px; }
@@ -586,3 +595,11 @@ td { padding: 11px 14px; border-top: 1px solid #efeee9; vertical-align: top; }
 .persona-chip { display: inline-flex; gap: 7px; align-items: center; border: 1px solid var(--line); background: white; border-radius: 99px; padding: 4px 12px 4px 4px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .persona-chip .avatar { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--coral-soft); color: #8a3d2d; font-size: 12px; }
 .persona-chip small { color: var(--green); font-size: 10.5px; }
+
+/* Mano skelbimai: skirtukai, testavimo atvejų <details> */
+.tabs { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; background: none; padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button.on { color: var(--green); border-bottom-color: var(--green); }
+.listing-row.draft { grid-template-columns: 58px 1fr auto auto; }
+.cases-details summary { cursor: pointer; font-family: 'Manrope', sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.6px; padding: 6px 0; }
+.cases-details .subcopy { margin-top: 6px; }

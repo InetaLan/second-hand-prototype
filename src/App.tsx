@@ -52,7 +52,6 @@ function Shell({ children }: { children: ReactNode }) {
             <strong>{me.name}</strong>
             <span>{me.role}</span>
           </div>
-          <Icon name="more" size={18} />
         </div>
       </aside>
       <main>
@@ -236,7 +235,7 @@ function Home() {
             <span className="action-icon"><Icon name="tag" size={24} /></span>
             <div>
               <h3>F2 · Kiek prašyti?</h3>
-              <p>Kainos intervalas pagal panašias parduotas prekes ir 3 strategijos. Kainą pasirenkate jūs.</p>
+              <p>Pradėkite nuo nuotraukų – kainą pasiūlysime 3 žingsnyje pagal panašias parduotas prekes.</p>
             </div>
             <Icon name="arrow" />
           </button>
@@ -247,14 +246,11 @@ function Home() {
       </section>
 
       <section className="home-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">TESTAVIMO ATVEJAI</span>
-            <h2>Išbandykite visus scenarijus</h2>
-            <p className="subcopy">Kiekvienai funkcijai — sėkmės atvejis, DI klaida ar atsakymo nebuvimas ir žemas pasitikėjimas.</p>
-          </div>
-        </div>
-        <TestCases />
+        <details className="cases-details">
+          <summary>Testavimo atvejai (10)</summary>
+          <p className="subcopy">Kiekvienai funkcijai — sėkmės atvejis, DI klaida ar atsakymo nebuvimas ir žemas pasitikėjimas.</p>
+          <TestCases />
+        </details>
       </section>
 
       <section className="home-section">
@@ -292,8 +288,23 @@ function Home() {
 
 /* ---------- My listings ---------- */
 function Listings() {
-  const { listings, setListings, go, draft, openProduct, toast } = useStore()
+  const { listings, setListings, go, draft, openProduct, toast, saved } = useStore()
   const [confirm, setConfirm] = useState<Product | null>(null)
+  const [tab, setTab] = useState<"mine" | "saved">("mine")
+  const [editing, setEditing] = useState<Product | null>(null)
+  const [priceText, setPriceText] = useState("")
+  const [priceError, setPriceError] = useState("")
+  const savedItems = [...CATALOG, ...listings].filter((p) => saved.includes(p.id))
+
+  // Ta pati validacija kaip PriceStep: tik skaičiai > 0
+  const savePrice = () => {
+    const v = Number(priceText.replace(",", "."))
+    if (!/^\d+([.,]\d{1,2})?$/.test(priceText.trim()) || !(v > 0)) return setPriceError("Įveskite kainą skaičiais, didesnę už 0 (pvz., 15).")
+    setListings((ls) => ls.map((x) => (x.id === editing!.id ? { ...x, price: v } : x)))
+    toast(`Kaina pakeista: ${v} €`)
+    setEditing(null)
+  }
+
   return (
     <div className="page list-page">
       <header className="flow-header">
@@ -302,7 +313,23 @@ function Listings() {
         <button className="text-btn" onClick={() => go("sell")}>+ Naujas</button>
       </header>
       <section className="flow-content">
-        {draft && (draft.photos.length > 0 || draft.fields.category.value) && (
+        <div className="tabs" role="tablist">
+          <button role="tab" aria-selected={tab === "mine"} className={tab === "mine" ? "on" : ""} onClick={() => setTab("mine")}>Mano skelbimai</button>
+          <button role="tab" aria-selected={tab === "saved"} className={tab === "saved" ? "on" : ""} onClick={() => setTab("saved")}>Išsaugoti{saved.length ? ` (${saved.length})` : ""}</button>
+        </div>
+        {tab === "saved" &&
+          (savedItems.length ? (
+            <div className="product-grid home-grid">
+              {savedItems.map((p) => <ProductCard key={p.id} p={p} />)}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <span className="ai-orb"><Icon name="heart" /></span>
+              <h2>Dar nieko neišsaugojote</h2>
+              <p>Paspauskite ♡ ant patikusios prekės — ji atsiras čia.</p>
+            </div>
+          ))}
+        {tab === "mine" && draft && (draft.photos.length > 0 || draft.fields.category.value) && (
           <div className="listing-row draft" onClick={() => go("sell")}>
             {draft.photos[0] ? <img src={draft.photos[0].src} alt="" /> : <span className="ai-orb"><Icon name="edit" /></span>}
             <div><strong>{draft.fields.title.value || "Skelbimas be pavadinimo"}</strong><span>Juodraštis · išsaugotas automatiškai</span></div>
@@ -310,7 +337,7 @@ function Listings() {
             <button className="text-btn">Tęsti</button>
           </div>
         )}
-        {listings.length === 0 && !draft && (
+        {tab === "mine" && listings.length === 0 && !draft && (
           <div className="empty-state">
             <span className="ai-orb"><Icon name="tag" /></span>
             <h2>Kol kas skelbimų nėra</h2>
@@ -318,7 +345,7 @@ function Listings() {
             <button className="primary" onClick={() => go("sell")}>Kurti skelbimą</button>
           </div>
         )}
-        {listings.map((l) => (
+        {tab === "mine" && listings.map((l) => (
           <div className="listing-row" key={l.id} onClick={() => openProduct(l)}>
             {l.image ? <img src={l.image} alt="" /> : <span className="ai-orb"><Icon name="image" /></span>}
             <div>
@@ -326,10 +353,48 @@ function Listings() {
               <span>{l.brand} · {l.size} · {l.price} € {l.aiAssisted && <> · <Icon name="sparkle" size={11} /> parengta su DI</>}</span>
             </div>
             <em className={`status ${l.status}`}>{l.status === "active" ? "Aktyvus" : "Tikrina moderatorius"}</em>
+            <button
+              className="text-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                setEditing(l)
+                setPriceText(String(l.price))
+                setPriceError("")
+              }}
+            >
+              Keisti kainą
+            </button>
             <button className="icon-btn" aria-label="Pašalinti skelbimą" onClick={(e) => { e.stopPropagation(); setConfirm(l) }}><Icon name="trash" size={16} /></button>
           </div>
         ))}
       </section>
+      <Modal open={!!editing} onClose={() => setEditing(null)} label="Keisti kainą">
+        <div className="compare">
+          <h2>Keisti kainą</h2>
+          <p className="small">„{editing?.title}“ · dabar {editing?.price} €</p>
+          <label className="own-price">
+            <span>Nauja kaina</span>
+            <div className={priceError ? "invalid" : ""}>
+              <input
+                inputMode="decimal"
+                value={priceText}
+                onChange={(e) => {
+                  setPriceText(e.target.value)
+                  setPriceError("")
+                }}
+                onKeyDown={(e) => e.key === "Enter" && savePrice()}
+                aria-invalid={!!priceError}
+              />
+              <b>€</b>
+            </div>
+          </label>
+          {priceError && <p className="error-text" role="alert">{priceError}</p>}
+          <div className="btn-row">
+            <button className="primary" onClick={savePrice}>Išsaugoti</button>
+            <button className="secondary" onClick={() => setEditing(null)}>Atšaukti</button>
+          </div>
+        </div>
+      </Modal>
       <Modal open={!!confirm} onClose={() => setConfirm(null)} label="Pašalinti skelbimą">
         <div className="compare">
           <h2>Pašalinti skelbimą?</h2>

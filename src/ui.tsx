@@ -1,4 +1,4 @@
-import { ReactNode, useEffect } from "react"
+import { ReactNode, RefObject, useEffect, useRef } from "react"
 
 export function Icon({ name, size = 20, className = "" }: { name: string; size?: number; className?: string }) {
   const paths: Record<string, ReactNode> = {
@@ -69,17 +69,48 @@ export function Confidence({ kind }: { kind: ConfKind }) {
   )
 }
 
-export function Modal({ open, onClose, children, wide = false, label }: { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean; label: string }) {
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+// Fokuso gaudyklė: Tab / Shift+Tab lieka viduje, atidarius fokusas į pirmą valdiklį, uždarius grąžinamas atgal
+export function useFocusTrap(open: boolean, ref: RefObject<HTMLElement | null>, onEscape?: () => void) {
+  const escape = useRef(onEscape)
+  escape.current = onEscape
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose()
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [open, onClose])
+    const previous = document.activeElement as HTMLElement | null
+    const items = () => Array.from(ref.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])
+    items()[0]?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return escape.current?.()
+      if (e.key !== "Tab" || !ref.current) return
+      const list = items()
+      if (!list.length) return e.preventDefault()
+      const first = list[0]
+      const last = list[list.length - 1]
+      const active = document.activeElement
+      if (e.shiftKey && (active === first || !ref.current.contains(active))) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && (active === last || !ref.current.contains(active))) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      if (previous && document.contains(previous)) previous.focus()
+    }
+  }, [open, ref])
+}
+
+export function Modal({ open, onClose, children, wide = false, label }: { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean; label: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useFocusTrap(open, ref, onClose)
   if (!open) return null
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className={`modal ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-label={label} onMouseDown={(e) => e.stopPropagation()}>
+      <div ref={ref} className={`modal ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-label={label} onMouseDown={(e) => e.stopPropagation()}>
         <button className="modal-close" onClick={onClose} aria-label="Uždaryti">
           <Icon name="close" size={18} />
         </button>

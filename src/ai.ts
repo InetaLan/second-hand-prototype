@@ -1,6 +1,6 @@
 // Simulated AI + rule-based helpers. Quality checks and colour detection run on the
 // real image pixels; recognition, pricing and search ranking follow the rules in ND2.
-import { COMPARABLES, Comparable, Recognition, RECOGNITION, Suggestion } from "./data"
+import { CATEGORY_BASE_PRICE, COMPARABLES, NO_BRAND, Comparable, Recognition, RECOGNITION, Suggestion } from "./data"
 
 export const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -127,20 +127,22 @@ export type Facts = { category: string; color: string; brand: string; size: stri
 
 export function makeTitle(f: Facts, variant = 0) {
   const name = itemName(f.category, f.color)
-  const brand = f.brand && !f.brand.startsWith("Kita") ? f.brand : ""
+  const brand = f.brand && f.brand !== NO_BRAND ? f.brand : ""
   const options = [
     [brand, name].filter(Boolean).join(" "),
-    [cap(name), brand && `· ${brand}`].filter(Boolean).join(" "),
-    [cap(name), f.size && `, ${f.size} dydis`].filter(Boolean).join(""),
+    [cap(name), brand].filter(Boolean).join(" "),
+    [cap(name), f.size && `${f.size} dydis`].filter(Boolean).join(" "),
   ]
   const t = cap(options[variant % options.length] || name)
-  return (f.size && variant % 3 === 0 ? `${t}, ${f.size}` : t).slice(0, 60)
+  // Tik raidės, skaičiai ir tarpai — kad DI pavadinimas praeitų tą pačią validaciją (pvz., dydis „Vaikiškas (98–116)“)
+  const title = f.size && variant % 3 === 0 ? `${t} ${f.size}` : t
+  return title.replace(/[^\p{L}\d ]+/gu, " ").replace(/\s+/g, " ").trim().slice(0, 60).trim()
 }
 
 export type Tone = "paprastas" | "dalykiškas" | "žaismingas"
 export function makeDescription(f: Facts, tone: Tone, variant = 0) {
   const name = itemName(f.category, f.color)
-  const brand = f.brand && !f.brand.startsWith("Kita") ? f.brand : ""
+  const brand = f.brand && f.brand !== NO_BRAND ? f.brand : ""
   const noDefects = /^be defekt/i.test(f.defects.trim())
   const defects = !f.defects ? "" : noDefects ? "Defektų nepastebėjau." : `Atkreipkite dėmesį: ${f.defects.replace(/\.$/, "")}.`
   const cond = f.condition ? f.condition.toLowerCase() : ""
@@ -179,10 +181,15 @@ export function quantile(sorted: number[], q: number) {
 }
 const CONDITION_ADJ: Record<string, number> = { "Nauja su etiketėmis": 0.2, "Nauja be etikečių": 0.12, "Labai gera": 0.04, Gera: -0.1, Patenkinama: -0.3 }
 
-export function ruleRange(condition: string) {
+export function ruleRange(category: string, condition: string) {
   // V1 rule: same brand + category sold median adjusted by condition
-  const base = 14 * (1 + (CONDITION_ADJ[condition] ?? 0))
+  const base = (CATEGORY_BASE_PRICE[category] ?? 14) * (1 + (CONDITION_ADJ[condition] ?? 0))
   return { low: Math.round(base * 0.75), high: Math.round(base * 1.15) }
+}
+
+const CATEGORY_GENITIVE: Record<string, string> = {
+  Megztiniai: "megztinių", Džemperiai: "džemperių", Palaidinės: "palaidinių", Marškinėliai: "marškinėlių", Marškiniai: "marškinių", Džinsai: "džinsų",
+  Kelnės: "kelnių", Suknelės: "suknelių", Striukės: "striukių", Paltai: "paltų", Kostiumai: "kostiumų", Kepurės: "kepurių", Rinkiniai: "rinkinių",
 }
 
 export type PriceResult = {
@@ -198,11 +205,11 @@ export function aiRange(comps: Comparable[], f: Facts): PriceResult {
   const prices = comps.map((c) => c.price).sort((a, b) => a - b)
   const adj = 1 + (CONDITION_ADJ[f.condition] ?? 0) - 0.04
   const factors: [string, string][] = []
-  if (f.brand && !f.brand.startsWith("Kita")) factors.push([`Prekės ženklas ${f.brand}`, "+10 %"])
+  if (f.brand && f.brand !== NO_BRAND) factors.push([`Prekės ženklas ${f.brand}`, "+10 %"])
   if (f.condition) factors.push([`Būklė „${f.condition.toLowerCase()}“`, `${CONDITION_ADJ[f.condition] >= 0 ? "+" : "−"}${Math.abs(Math.round((CONDITION_ADJ[f.condition] ?? 0) * 100))} %`])
-  factors.push(["Rudens sezonas (džemperių paklausa)", "+2 %"])
+  factors.push([`Rudens sezonas (${CATEGORY_GENITIVE[f.category] ?? "drabužių"} paklausa)`, "+2 %"])
   if (prices.length < 8) {
-    const r = ruleRange(f.condition)
+    const r = ruleRange(f.category, f.condition)
     return { count: prices.length, low: r.low, mid: Math.round((r.low + r.high) / 2), high: r.high, confidence: "žemas", factors, fallback: true }
   }
   const low = Math.round(quantile(prices, 0.25) * adj)

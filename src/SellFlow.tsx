@@ -2,7 +2,7 @@ import { ChangeEvent, ReactNode, useEffect, useMemo, useRef, useState } from "re
 import { BRANDS, CATEGORIES, COLORS, CONDITIONS, DEMO_PHOTOS, DemoKind, LUXURY, MULTI_ITEMS, Recognition, SIZES } from "./data"
 import { confWord, Facts, inspectPhoto, makeDescription, makeTitle, recognitionFor, Tone, wait } from "./ai"
 import { Draft, Field, FieldKey, Photo, useStore } from "./store"
-import { Confidence, ConfKind, Highlight, Icon, Modal } from "./ui"
+import { Confidence, ConfKind, Highlight, Icon, Modal, useFocusTrap } from "./ui"
 import { PriceStep } from "./PriceStep"
 
 const FIELD_ORDER: FieldKey[] = ["title", "category", "brand", "color", "size", "condition", "composition", "defects", "description"]
@@ -20,6 +20,15 @@ const LABELS: Record<FieldKey, string> = {
 const REQUIRED: FieldKey[] = ["title", "category", "brand", "color", "size", "condition", "defects", "description"]
 const HUMAN_ONLY: FieldKey[] = ["size", "condition", "defects"]
 const OPTIONS: Partial<Record<FieldKey, string[]>> = { category: CATEGORIES, color: COLORS, size: SIZES, condition: CONDITIONS }
+
+// Teksto laukų validacija: raidės (lotyniškos ir lietuviškos), skaičiai tik pavadinime, tarpai leidžiami
+export function validateText(key: FieldKey, value: string): string | undefined {
+  const v = value.trim().replace(/\s+/g, " ")
+  if (!v) return undefined
+  if (key === "title" && !/^[\p{L}\d ]+$/u.test(v)) return "Pavadinime gali būti tik raidės ir skaičiai."
+  if ((key === "brand" || key === "defects") && !/^[\p{L} ]+$/u.test(v)) return "Šiame lauke gali būti tik raidės."
+  return undefined
+}
 
 const empty = (): Field => ({ value: "", source: "empty" })
 export const newDraft = (tone: Tone): Draft => ({
@@ -94,6 +103,7 @@ export function applyRecognition(fields: Record<FieldKey, Field>, rec: Recogniti
 function recognitionKey(d: Draft, item?: string) {
   const main = d.photos[0]
   const hasLabel = d.photos.some((p) => p.isLabel)
+  if (item === "photo") return { key: "upload", color: main?.quality?.colors, hasLabel }
   if (main?.demo === "multi") return { key: item === "sweater" ? "multiSweater" : item || "set" }
   if (main?.demo === "sweater" || main?.demo === "dark") return { key: hasLabel ? "sweaterLabel" : "sweater" }
   return { key: "upload", color: main?.quality?.colors, hasLabel }
@@ -140,7 +150,7 @@ export function SellFlow({ exit }: { exit: () => void }) {
     await wait(total * 0.3)
     if (!alive()) return clearTimeout(slowTimer)
     let item = draft.item
-    if (draft.photos[0]?.demo === "multi" && !opts.onlyEmpty) {
+    if (draft.photos.some((p) => p.demo === "multi") && !opts.onlyEmpty) {
       clearTimeout(slowTimer)
       setAnalysis({ stage: 1, label: "Kadre radau 3 daiktus", slow: false, askItem: true })
       return
@@ -177,10 +187,18 @@ export function SellFlow({ exit }: { exit: () => void }) {
     setDraftLocal({ ...d, fields, item, mode: "ai", step: "details", aiFields: fields, fresh: false, updatedAt: Date.now() })
   }
 
+  // Pasirinkus daiktą, jo nuotrauka tampa pagrindine (pirma): atpažinimas imamas iš jos
+  const toFront = (photos: Photo[], i: number) => (i > 0 ? [photos[i], ...photos.filter((_, j) => j !== i)] : photos)
   const chooseItem = (item: string) => {
-    update((d) => ({ ...d, item }))
+    update((d) => ({ ...d, item, photos: toFront(d.photos, d.photos.findIndex((p) => p.demo === "multi")) }))
     const total = store.demo.slowAI ? 11000 : 3600
     continueAnalysis(run.current, item, total, false)
+  }
+
+  const choosePhoto = (index: number) => {
+    update((d) => ({ ...d, item: "photo", photos: toFront(d.photos, index) }))
+    const total = store.demo.slowAI ? 11000 : 3600
+    continueAnalysis(run.current, "photo", total, false)
   }
 
   // E2: user stops waiting and fills manually; AI fills only empty fields later
@@ -247,8 +265,9 @@ export function SellFlow({ exit }: { exit: () => void }) {
       {analysis && (
         <AnalysisOverlay
           analysis={analysis}
-          photo={draft.photos[0]?.src}
+          photos={draft.photos}
           choose={chooseItem}
+          choosePhoto={choosePhoto}
           manual={fillManually}
           cancel={() => {
             run.current++
@@ -502,29 +521,71 @@ function PhotosStep({
 }
 
 /* ---------------- Analysis progress, A1 item choice, E2 slow ---------------- */
-function AnalysisOverlay({ analysis, photo, choose, manual, cancel }: { analysis: NonNullable<Analysis>; photo?: string; choose: (id: string) => void; manual: () => void; cancel: () => void }) {
+function AnalysisOverlay({
+  analysis,
+  photos,
+  choose,
+  choosePhoto,
+  manual,
+  cancel,
+}: {
+  analysis: NonNullable<Analysis>
+  photos: Photo[]
+  choose: (id: string) => void
+  choosePhoto: (index: number) => void
+  manual: () => void
+  cancel: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useFocusTrap(true, ref, cancel)
+  // Pasikeitus turiniui (eiga → daikto pasirinkimas) fokusas vėl perkeliamas į pirmą valdiklį
+  useEffect(() => {
+    if (!ref.current?.contains(document.activeElement)) ref.current?.querySelector<HTMLElement>("button")?.focus()
+  }, [analysis.askItem])
+  const [shown, setShown] = useState(() => Math.max(0, photos.findIndex((p) => p.demo === "multi")))
+  const current = photos[shown]
+  const isMulti = current?.demo === "multi"
   return (
     <div className="modal-backdrop">
-      <div className="modal analysis" role="dialog" aria-modal="true" aria-label="DI analizė">
+      <div className="modal analysis" role="dialog" aria-modal="true" aria-label="DI analizė" ref={ref}>
         {analysis.askItem ? (
           <>
             <span className="eyebrow">KADRE KELI DAIKTAI</span>
             <h2>Kurį daiktą parduodate?</h2>
             <p className="small">DI aprašys tik pasirinktą sritį. Spustelėkite daiktą nuotraukoje arba sąraše.</p>
-            <div className="item-picker">
-              {photo && <img src={photo} alt="" />}
-              {MULTI_ITEMS.map((it) => (
-                <button key={it.id} className="box" style={{ left: `${it.box.x}%`, top: `${it.box.y}%`, width: `${it.box.w}%`, height: `${it.box.h}%` }} onClick={() => choose(it.id)}>
-                  <span>{it.label}</span>
-                </button>
-              ))}
+            {photos.length > 1 && (
+              <div className="picker-thumbs">
+                {photos.map((p, i) => (
+                  <button key={i} className={i === shown ? "on" : ""} onClick={() => setShown(i)} aria-label={`Rodyti nuotrauką ${i + 1}`}>
+                    <img src={p.src} alt="" />
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="item-stage">
+              <div className="item-picker">
+                {current && <img src={current.src} alt={`Nuotrauka ${shown + 1}`} />}
+                {isMulti
+                  ? MULTI_ITEMS.map((it) => (
+                      <button key={it.id} className="box" style={{ left: `${it.box.x}%`, top: `${it.box.y}%`, width: `${it.box.w}%`, height: `${it.box.h}%` }} onClick={() => choose(it.id)}>
+                        <span>{it.label}</span>
+                      </button>
+                    ))
+                  : current && (
+                      <button className="primary from-photo" onClick={() => choosePhoto(shown)}>
+                        Parduodu daiktą iš šios nuotraukos
+                      </button>
+                    )}
+              </div>
             </div>
-            <div className="item-list">
-              {MULTI_ITEMS.map((it) => (
-                <button key={it.id} onClick={() => choose(it.id)}>{it.label}</button>
-              ))}
-              <button onClick={() => choose("set")}><Icon name="layers" size={15} /> Visi kartu – rinkinys</button>
-            </div>
+            {isMulti && (
+              <div className="item-list">
+                {MULTI_ITEMS.map((it) => (
+                  <button key={it.id} onClick={() => choose(it.id)}>{it.label}</button>
+                ))}
+                <button onClick={() => choose("set")}><Icon name="layers" size={15} /> Visi kartu – rinkinys</button>
+              </div>
+            )}
             <button className="text-btn" onClick={cancel}>Atšaukti</button>
           </>
         ) : (
@@ -663,10 +724,11 @@ function DetailsStep({ draft, update, refill, busy }: { draft: Draft; update: (f
     for (const k of REQUIRED) {
       if (!f[k].value.trim()) errs[k] = f[k].variants ? "Pasirinkite vieną iš DI variantų arba įveskite patys." : HUMAN_ONLY.includes(k) ? "DI to nemato — įveskite patys." : "Privalomas laukas."
     }
-    if (f.title.value.length > 60) errs.title = "Pavadinimas turi būti iki 60 simbolių."
+    for (const k of ["title", "brand", "defects"] as const) if (!errs[k]) errs[k] = validateText(k, f[k].value)
+    if (!errs.title && f.title.value.length > 60) errs.title = "Pavadinimas turi būti iki 60 simbolių."
     if (f.description.value && f.description.value.length < 40) errs.description = "Aprašymas per trumpas (bent 40 simbolių)."
     setErrors(errs)
-    const first = FIELD_ORDER.find((k) => errs[k])
+    const first = FIELD_ORDER.find((k) => errs[k] || validateText(k, f[k].value))
     if (first) {
       // E4: error next to the field, focus moved there
       const el = document.getElementById(`f-${first}`)
@@ -693,7 +755,7 @@ function DetailsStep({ draft, update, refill, busy }: { draft: Draft; update: (f
             ))}
           </div>
         )}
-        {draft.item && <span className="item-tag"><Icon name="layers" size={13} /> Aprašomas: {MULTI_ITEMS.find((m) => m.id === draft.item)?.label || "visas rinkinys"}</span>}
+        {draft.item && <span className="item-tag"><Icon name="layers" size={13} /> Aprašomas: {draft.item === "photo" ? "daiktas iš pasirinktos nuotraukos" : MULTI_ITEMS.find((m) => m.id === draft.item)?.label || "visas rinkinys"}</span>}
       </aside>
       <div className="form-area">
         {draft.mode === "ai" && (
@@ -851,6 +913,8 @@ function FieldRow({
   setTone: (t: Tone) => void
 }) {
   const kind = badgeFor(k, field, aiOn)
+  // Klaida rodoma iš karto įvedant; įvestas tekstas neištrinamas
+  error = error ?? validateText(k, field.value)
   const full = k === "title" || k === "description" || k === "defects"
   const required = REQUIRED.includes(k)
   const isAI = field.aiOffered && !HUMAN_ONLY.includes(k)
@@ -875,7 +939,7 @@ function FieldRow({
   else
     control = (
       <>
-        <input id={`f-${k}`} list={k === "brand" ? "brands" : undefined} value={field.value} maxLength={k === "title" ? 70 : 80} onChange={(e) => onChange(e.target.value, "edit")} placeholder={k === "brand" ? "Pradėkite rašyti ženklą" : k === "composition" ? "Pvz., 100 % medvilnė" : ""} aria-invalid={!!error} />
+        <input id={`f-${k}`} list={k === "brand" ? "brands" : undefined} value={field.value} maxLength={k === "title" ? 60 : 80} onChange={(e) => onChange(e.target.value, "edit")} placeholder={k === "brand" ? "Pradėkite rašyti ženklą" : k === "composition" ? "Pvz., 100 % medvilnė" : ""} aria-invalid={!!error} />
         {k === "brand" && <datalist id="brands">{BRANDS.map((b) => <option key={b} value={b} />)}</datalist>}
       </>
     )
@@ -1066,6 +1130,7 @@ function DoneScreen({ draft, exit, undo }: { draft: Draft; exit: () => void; und
       aiAssisted: FIELD_ORDER.some((k) => f[k].aiOffered),
       mine: true,
       status: (risky ? "moderation" : "active") as "moderation" | "active",
+      moderationUntil: risky ? Date.now() + 20000 : undefined,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],

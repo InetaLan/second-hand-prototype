@@ -103,11 +103,56 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const toast = useCallback((text: string, action?: Toast["action"]) => {
-    const id = nextId.current++
-    setToasts((t) => [...t, { id, text, action }])
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), action ? 7000 : 4000)
+  // Toast su veiksmu nedingsta, kol pelė virš jo ar jame fokusas; išėjus laikmatis (7 s) prasideda iš naujo
+  const toastTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
+  const toastHold = useRef(new Map<number, { hover: boolean; focus: boolean }>())
+  const dismissLater = useCallback((id: number, ms: number) => {
+    clearTimeout(toastTimers.current.get(id))
+    toastTimers.current.set(
+      id,
+      setTimeout(() => {
+        toastTimers.current.delete(id)
+        toastHold.current.delete(id)
+        setToasts((t) => t.filter((x) => x.id !== id))
+      }, ms),
+    )
   }, [])
+  const holdToast = (id: number, change: Partial<{ hover: boolean; focus: boolean }>) => {
+    const state = { hover: false, focus: false, ...toastHold.current.get(id), ...change }
+    toastHold.current.set(id, state)
+    if (state.hover || state.focus) clearTimeout(toastTimers.current.get(id))
+    else dismissLater(id, 7000)
+  }
+
+  const toast = useCallback(
+    (text: string, action?: Toast["action"]) => {
+      const id = nextId.current++
+      setToasts((t) => [...t, { id, text, action }])
+      dismissLater(id, action ? 7000 : 4000)
+    },
+    [dismissLater],
+  )
+
+  const updateListings = (fn: (l: Product[]) => Product[]) =>
+    setListingsState((l) => {
+      const next = fn(l)
+      save("ak.listings", next)
+      return next
+    })
+
+  // Moderacijos imitacija: po moderationUntil skelbimas tampa aktyvus (veikia ir perkrovus puslapį)
+  useEffect(() => {
+    const pending = listings.filter((l) => l.status === "moderation" && l.moderationUntil)
+    if (!pending.length) return
+    const soonest = Math.min(...pending.map((l) => l.moderationUntil!))
+    const t = setTimeout(() => {
+      const due = pending.filter((l) => l.moderationUntil! <= Date.now())
+      updateListings((ls) => ls.map((l) => (due.some((d) => d.id === l.id) ? { ...l, status: "active", moderationUntil: undefined } : l)))
+      due.forEach((l) => toast(`Moderatorius patvirtino skelbimą „${l.title}“.`))
+    }, Math.max(0, soonest - Date.now()))
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listings, toast])
 
   const ctx: Ctx = {
     view,
@@ -121,12 +166,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       save("ak.persona", p)
     },
     listings,
-    setListings: (fn) =>
-      setListingsState((l) => {
-        const next = fn(l)
-        save("ak.listings", next)
-        return next
-      }),
+    setListings: updateListings,
     saved,
     toggleSaved: (id) =>
       setSaved((s) => {
@@ -163,12 +203,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toasts" aria-live="polite">
         {toasts.map((t) => (
-          <div className="toast" key={t.id}>
+          <div
+            className="toast"
+            key={t.id}
+            onMouseEnter={t.action ? () => holdToast(t.id, { hover: true }) : undefined}
+            onMouseLeave={t.action ? () => holdToast(t.id, { hover: false }) : undefined}
+            onFocus={t.action ? () => holdToast(t.id, { focus: true }) : undefined}
+            onBlur={t.action ? (e) => !e.currentTarget.contains(e.relatedTarget) && holdToast(t.id, { focus: false }) : undefined}
+          >
             <span>{t.text}</span>
             {t.action && (
               <button
                 onClick={() => {
                   t.action!.run()
+                  clearTimeout(toastTimers.current.get(t.id))
                   setToasts((x) => x.filter((y) => y.id !== t.id))
                 }}
               >

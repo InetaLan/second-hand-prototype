@@ -22,9 +22,10 @@ export function PriceStep({ draft, update }: { draft: Draft; update: (fn: (d: Dr
   const [deviation, setDeviation] = useState<null | number>(null)
   const ownRef = useRef<HTMLInputElement>(null)
 
-  const comps = COMPARABLES.filter((c) => !draft.removedComps.includes(c.id))
-  const rule = ruleRange(fx.condition)
-  const result: PriceResult = useMemo(() => aiRange(comps, fx), [draft.removedComps.length, fx.condition, fx.brand]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Tik tos pačios kategorijos parduotos prekės; jei jų nėra — tuščias sąrašas ir orientacinis intervalas
+  const comps = COMPARABLES.filter((c) => c.category === fx.category && !draft.removedComps.includes(c.id))
+  const rule = ruleRange(fx.category, fx.condition)
+  const result: PriceResult = useMemo(() => aiRange(comps, fx), [draft.removedComps.length, fx.category, fx.condition, fx.brand]) // eslint-disable-line react-hooks/exhaustive-deps
   const showAI = phase === "ai" && store.aiAvailable
   const range = showAI && !result.fallback ? result : { ...result, low: rule.low, high: rule.high, mid: Math.round((rule.low + rule.high) / 2), fallback: true }
   const price = draft.price
@@ -37,6 +38,14 @@ export function PriceStep({ draft, update }: { draft: Draft; update: (fn: (d: Dr
     const t2 = setTimeout(() => setPhase("ai"), slow ? 7000 : 2000)
     return () => [t0, t1, t2].forEach(clearTimeout)
   }, [store.aiAvailable, store.demo.slowAI])
+
+  // Pasirinkta strategija seka intervalą (pvz., kai po taisyklės intervalo ateina DI intervalas); savos kainos neliečiame
+  useEffect(() => {
+    if (draft.price?.source !== "strategy") return
+    const amount = ({ Greitai: range.low, "Rinkos kaina": range.mid, Maksimali: range.high } as Record<string, number>)[draft.price.strategy ?? ""]
+    if (amount !== undefined && amount !== draft.price.value) update((d) => (d.price?.source === "strategy" ? { ...d, price: { ...d.price, value: amount } } : d))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range.low, range.mid, range.high])
 
   const choose = (value: number, strategy: string) => {
     setOwn("")
@@ -213,6 +222,7 @@ export function PriceStep({ draft, update }: { draft: Draft; update: (fn: (d: Dr
           <p className="comparison-note"><Icon name="info" size={16} /> {store.aiAvailable ? "Palyginamos prekės bus parodytos, kai DI baigs paiešką." : "Be DI palyginamų prekių paieška neveikia."}</p>
         ) : (
           <>
+            {comps.length === 0 && <p className="comparison-note"><Icon name="info" size={16} /> Šios kategorijos parduotų prekių nerasta — rodomas orientacinis intervalas.</p>}
             {comps.slice(0, showAll ? comps.length : 5).map((c) => (
               <div className="comparable" key={c.id}>
                 <img src={c.image} alt="" />
